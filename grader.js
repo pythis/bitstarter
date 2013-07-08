@@ -24,6 +24,8 @@ References:
 var fs = require('fs');
 var program = require('commander');
 var cheerio = require('cheerio');
+var sys = require('util');
+var rest = require('restler');
 var HTMLFILE_DEFAULT = "index.html";
 var CHECKSFILE_DEFAULT = "checks.json";
 
@@ -38,6 +40,10 @@ var assertFileExists = function(infile) {
 
 var cheerioHtmlFile = function(htmlfile) {
     return cheerio.load(fs.readFileSync(htmlfile));
+};
+
+var cheerioHtmlContents = function(contents) {
+    return cheerio.load(contents);
 };
 
 var loadChecks = function(checksfile) {
@@ -55,6 +61,28 @@ var checkHtmlFile = function(htmlfile, checksfile) {
     return out;
 };
 
+var checkHtmlContents = function(contents, checksfile) {
+    $ = cheerioHtmlContents(contents);
+    var checks = loadChecks(checksfile).sort();
+    var out = {};
+    for(var ii in checks) {
+	
+        var present = $(checks[ii]).length > 0;
+        out[checks[ii]] = present;
+    }
+    return out;
+};
+
+
+var checkRemoteHtmlFile = function(url, checksfile) {
+    rest.get(url).on('complete', function(data) {
+	
+	fs.writeFileSync("/tmp/my.tmp", data);
+	     });    
+    
+};
+
+
 var clone = function(fn) {
     // Workaround for commander.js issue.
     // http://stackoverflow.com/a/6772648
@@ -65,8 +93,19 @@ if(require.main == module) {
     program
         .option('-c, --checks <check_file>', 'Path to checks.json', clone(assertFileExists), CHECKSFILE_DEFAULT)
         .option('-f, --file <html_file>', 'Path to index.html', clone(assertFileExists), HTMLFILE_DEFAULT)
+         .option('-u, --url <url>', 'URL to index.html')
         .parse(process.argv);
-    var checkJson = checkHtmlFile(program.file, program.checks);
+    var checkJson;
+
+    var localFile = "/tmp/my.tmp"; 
+    if (program.url) {
+	checkJson = checkRemoteHtmlFile(program.url, program.checks);
+    } 	
+    if (program.file) {
+	localFile = program.file;
+    }
+    checkJson = checkHtmlFile(localFile, program.checks);
+    
     var outJson = JSON.stringify(checkJson, null, 4);
     console.log(outJson);
 } else {
